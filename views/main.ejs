@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<style>
+		#board {
+			display: none;
+		}
+		</style>
+		<script src = "/socket.io/socket.io.js"></script>
+		<script src = "http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+		<title>Group Chat</title>
+		<link rel='stylesheet' href='/stylesheets/style.css' />
+		<script>
+		$(document).ready(function() {
+			// set up the io tunnel
+			io = io.connect();
+			// prompt the user for their name
+			var name = prompt("Please enter your name: ");
+			// if the user has entered a name then emit a new event
+			if(name) {
+				io.emit('got_a_new_user', {name: name});
+			}
+			io.on('user_setup', function(data) {
+				for(message_id in data.messages) {
+					$('#conversation').append(data.messages[message_id])
+				}
+				$('#board').fadeIn('slow');
+
+				// add previous messages here and fade in the convo board
+			})
+			io.on('new_user', function(data) {
+				$('#conversation').append(data.message);
+			})
+			$('#send_message').click(function() {
+				io.emit('new_message', {name: name, message: $('#message').val()})
+			})
+			io.on('display_message', function(data) {
+				$('#conversation').append(data.message);
+			})
+		})
+
+		</script>
+	</head>
+	<body>
+		<div id="board">
+			<div id="conversation">
+			</div>
+			<input id='message' type='text' name='message' placeholder='Enter your message here'>
+			<button id='send_message'>Send</button>
+		</div>
+	</body>
+</html>
