@@ -2,25 +2,33 @@
 <html>
 	<head>
 		<style>
-		#board {
-			display: none;
-		}
-		#message {
-			display: block;
-		}
-		#send_message {
-			display: block;
-		}
-		#conversation {
-			border: 1.5px solid #ccc;
-			border-radius: 3px;
-			padding: 6px 12px;
-			margin-bottom: 10px;
-			overflow-y: auto;
-			height: 200px;
-		}
-
-		</style>
+			#board {
+				display: none;
+			}
+			#message {
+				display: block;
+			}
+			#send_message {
+				display: block;
+			}
+			#conversation {
+				border: 1.5px solid #ccc;
+				border-radius: 3px;
+				padding: 6px 12px;
+				margin-bottom: 10px;
+				overflow-y: auto;
+				height: 200px;
+			}
+			#create {
+				margin-bottom: 10px;
+			}
+			#create_submit {
+				margin-top: 5px;
+			}
+			.room {
+				margin: 5px;
+			}
+			</style>
 		<script src = "/socket.io/socket.io.js"></script>
 		<script src = "http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
 		<title>Group Chat</title>
@@ -29,47 +37,101 @@
 		<script src = "/javascripts/bootstrap.js"></script>
 		<script>
 		$(document).ready(function() {
+			// ---------- BEGIN SETUP / START FUNCTIONALITY ---------
 			// set up the io tunnel
 			io = io.connect();
 			// prompt the user for their name
+			// declare the room variable which will be used to keep track of the current room
+			var room;
+			// prompt the user for their name
 			var name = prompt("Please enter your name: ");
-			// if the user has entered a name then emit a new event
-			if(name) {
-				io.emit('got_a_new_user', {name: name});
+			if(!name) {
+				// reprompt the user if the name wasn't entered
+				name = prompt("Please enter your name: ");
 			}
+			// handle the user creating a room
+			$('#create_form').submit(function() {
+				event.preventDefault(); // don't actually submit
+				var room_name = $('#create_name').val()
+				if(room_name === "") { // if the room isn't specified then make it a generic name based on the user's name
+					room_name = name+"'s Room";
+				}
+				// help hide the modal so that the whole modal fades before the start buttons fade out
+				$('#create_modal').modal('hide')
+				$('body').removeClass('modal-open');
+				$('.modal-backdrop').remove();
+				// fade out the start buttons and then create the room when done
+				$('#start').fadeOut('slow', function() {
+					io.emit('create_room', {room: room_name, name: name})
+				})
+				// set the room variable to keep track of the room
+				room = room_name;
+			})
+			// ping the router for the list of rooms when the user tries to join a room
+			$('#join').on('click', function() {
+				// get the rooms and create a button for each of them
+				io.emit('get_rooms', function(data) {
+					var button = ""
+					for(id in data.rooms) {
+						button += "<button class='room btn btn-primary'>"+id+"</button>"
+						
+					}
+					$('#rooms_to_join').html(button)	
+				})
+			})
+			// handles the user joining a room
+			$(document).on('click', '.room', function() {
+				// get the room name from the button
+				var room_to_join = this.innerHTML
+				// set the room variable to keep track of it
+				room = room_to_join
+				// help hide the modal so that the whole modal fades before the start buttons fade out
+				$('#create_modal').modal('hide')
+				$('body').removeClass('modal-open');
+				$('.modal-backdrop').remove();
+				// fade out the start buttons and then join the room when done
+				$('#start').fadeOut('slow', function() {
+					io.emit('join_room', {room: room_to_join, name: name})
+				})
+			})
+
+			// ------------- BEGIN CHAT FUNCTIONALITY -----------------
+			// listen for the user setup event
 			io.on('user_setup', function(data) {
+				// immediate function to put all of the messages into the conversation
 				(function() {
 					for(message_id in data.messages) {
 						$('#conversation').append(data.messages[message_id])
-						console.log('in the append')
 					}
 				})();
-				
-				// convdiv[0].scrollTop = convdiv[0].scrollHeight
+				// fade in the board 
 				$('#board').fadeIn('slow', function() {
 					var convdiv = $('#conversation')
+					// scroll to the bottom of the conversation
 					$('#conversation').animate({
 						scrollTop: convdiv[0].scrollHeight
 					}, 1000)
 				});
-
-				// add previous messages here and fade in the convo board
 			})
+			// when a new user joins the chat append the message 
 			io.on('new_user', function(data) {
 				$('#conversation').append(data.message);
 			})
+			// handles when the user tries to send a message
 			$('#send_message').click(function() {
 				if($('#message').val() !== "") {
-					io.emit('new_message', {name: name, message: $('#message').val()})
+					io.emit('new_message', {name: name, message: $('#message').val(), room: room})
 					$('#message').val("")
 				}
 			})
+			// allows the user to send a message using the enter key as well
 			$(document).on('keyup', function(e) {
 				if(e.keyCode === 13 && $('#message').val() !== "") {
-					io.emit('new_message', {name: name, message: $('#message').val()})
+					io.emit('new_message', {name: name, message: $('#message').val(), room: room})
 					$('#message').val("")
 				}
 			})
+			// displays new messages and keeps the conversation scrolled to the bottom
 			io.on('display_message', function(data) {
 				$('#conversation').append(data.message);
 				var convdiv = $('#conversation')
@@ -81,6 +143,49 @@
 	</head>
 	<body>
 		<div class="container">
+<!-- Start -->
+			<div id="start">
+				<button class="btn btn-primary btn-lg col-md-4 col-md-offset-4" id="create" data-toggle="modal" data-target="#create_modal">Create a Chatroom!</button>
+				<!-- button for joining -->
+				<button class="btn btn-primary btn-lg col-md-4 col-md-offset-4" id="join" data-toggle="modal" data-target="#join_modal">Join a Chatroom!</button>
+				<!-- Modal for creating the chatroom -->
+				<div class="modal fade" id="create_modal" tabindex="-1" role="dialog" aria-labelledby="createModal" aria-hidden="true">
+					<div class="modal-dialog modal-sm">
+						<div class="modal-content">
+							<div class="modal-header">
+								<button type="button" class="close" data-dismiss="modal">
+									<span aria-hidden="true">x</span>
+									<span class="sr-only">Close</span>
+								</button>
+								<h4 class="modal-title" id="createModal">Create a Chatroom!</h4>
+							</div>
+							<div class="modal-body">
+								<form id="create_form">
+									<input id="create_name"class="form-control" type="text" name="create_name">
+									<input id="create_submit" class="btn btn-primary" type="submit" value="Create">
+								</form>
+							</div>
+						</div> <!-- End modal-content -->
+					</div> <!-- End modal-dialog modal-sm -->
+				</div> <!-- End modal -->
+			<!-- Modal for joining a chatroom -->
+				<div class="modal fade" id="join_modal" tabindex="-1" role="dialog" aria-labelledby="joinModal" aria-hidden="true">
+					<div class="modal-dialog modal-sm">
+						<div class="modal-content">
+							<div class="modal-header">
+								<button type="button" class="close" data-dismiss="modal">
+									<span aria-hidden="true">x</span>
+									<span class="sr-only">Close</span>
+								</button>
+								<h4 class="modal-title" id="joinModal">Join a Chatroom!</h4>
+							</div>
+							<div id="rooms_to_join" class="modal-body">	
+							</div>
+						</div> <!-- End modal-content -->
+					</div> <!-- End modal-dialog modal-sm -->
+				</div> <!-- End modal -->
+			</div>
+<!-- Board -->
 			<div id="board">
 				<div id="conversation">
 				</div>
@@ -89,7 +194,7 @@
 					<br>
 					<button class="btn btn-primary pull-right" id='send_message'>Send</button>
 				</div>
-			</div>
-		</div>
+			</div> <!-- board -->
+		</div> <!-- Container -->
 	</body>
 </html>
