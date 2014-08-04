@@ -2,4 +2,5 @@ Simple chat app made with Node.js and Express.io
 
 Used Twitter Bootstrap and jQuery for front-end
 
-Simple chat app allows you to chat with other people and see their responses in realtime.
+Simple chat app allows you to chat with other people and see their responses in realtime. Also allows you to create or join a room. 
+
